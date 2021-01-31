@@ -45,24 +45,21 @@ initial() {
     output "Updating all packages"
     # update package and upgrade Ubuntu
     sudo apt-get -y update 
-    sudo apt-get -y upgrade
-    sudo apt-get -y autoremove
-    output "Switching to Aptitude"
-    sudo apt-get -y install aptitude
-    sudo aptitude update -y
+    sudo apt -y upgrade
+    sudo apt -y autoremove
     whoami=`whoami`
 }
 
 install_nginx() {
     output "Installing Nginx server."
-    sudo aptitude -y install nginx
+    sudo apt -y install nginx
     sudo service nginx start
     sudo service cron start
 }
 
 install_apache() {
     output "Installing Apache server."
-    sudo aptitude -y install apache2
+    sudo apt -y install apache2
     sudo service apache2 start
     sudo service cron start
 }
@@ -72,7 +69,7 @@ install_mariadb() {
     # create random password
     rootpasswd=$(openssl rand -base64 12)
     export DEBIAN_FRONTEND="noninteractive"
-    sudo aptitude -y install mariadb-server
+    sudo apt -y install mariadb-server
     
     # adding user to group, creating dir structure, setting permissions
     sudo mkdir -p /var/www/pterodactyl/html
@@ -82,50 +79,28 @@ install_mariadb() {
 
 install_dependencies() {
     output "Installing PHP and Dependencies."
-    sudo aptitude -y install php7.0 php7.0-cli php7.0-gd php7.0-mysql php7.0-common php7.0-mbstring php7.0-tokenizer php7.0-bcmath php7.0-xml php7.0-fpm php7.0-curl
-}
-
-install_dependencies_apache() {
-    output "Installing PHP and Dependencies."
-    sudo aptitude -y install php7.0 php7.0-cli php7.0-gd php7.0-mysql php7.0-common php7.0-mbstring php7.0-tokenizer php7.0-bcmath php7.0-xml php7.0-fpm php7.0-curl libapache2-mod-php
+    sudo apt -y install php7.4 php7.4-cli php7.4-gd php7.4-mysql php7.4-common php7.4-mbstring php7.4-tokenizer php7.4-bcmath php7.4-xml php7.4-fpm php7.4-curl
 }
 
 install_timezone() {
-    output "Update default timezone."
-    output "Thanks for using this installation script. Donations welcome PayPal:support@my4x4.club"
-    # check if link file
-    sudo [ -L /etc/localtime ] &&  sudo unlink /etc/localtime
-    # update time zone
-    sudo ln -sf /usr/share/zoneinfo/$TIME /etc/localtime
-    sudo aptitude -y install ntpdate
-    sudo ntpdate time.stdtime.gov.tw
-    # write time to clock.
-    sudo hwclock -w
+
 }
 
 server() {
     output "Installing Server Packages."
     # installing more server files
-    sudo aptitude -y install curl
-    sudo aptitude -y install tar
-    sudo aptitude -y install unzip
-    sudo aptitude -y install git
-    sudo aptitude -y install python-pip
-    pip install --upgrade pip
-    sudo aptitude -y install supervisor
-    sudo aptitude -y install make
-    sudo aptitude -y install g++
-    sudo aptitude -y install python-minimal
-    sudo aptitude -y install gcc
-    sudo aptitude -y install libssl-dev
+    sudo apt -y install curl tar unzip git python3-pip
+    pip3 install --upgrade pip
+    sudo apt -y install supervisor
+    sudo aptitude -y install make g++ python-minimal gcc libssl-dev
 }
 
 pterodactyl() {
     output "Install Pterodactyl-Panel."
     # Installing the Panel
     cd /var/www/pterodactyl/html
-    curl -Lo v0.5.7.tar.gz https://github.com/Pterodactyl/Panel/archive/v0.5.7.tar.gz
-    tar --strip-components=1 -xzvf v0.5.7.tar.gz
+    curl -Lo panel.tar.gz https://github.com/pterodactyl/panel/releases/download/v1.2.2/panel.tar.gz
+    tar --strip-components=1 -xzvf panel.tar.gz
     sudo chmod -R 777 storage/* bootstrap/cache
     curl -sS https://getcomposer.org/installer | sudo php -- --install-dir=/usr/local/bin --filename=composer
     composer setup
@@ -230,8 +205,8 @@ echo '
     sudo ln -s /etc/nginx/sites-available/pterodactyl.conf /etc/nginx/sites-enabled/pterodactyl.conf
     output "Install LetsEncrypt and setting SSL"
     sudo service nginx restart
-    sudo aptitude -y install letsencrypt
-    sudo letsencrypt certonly -a webroot --webroot-path=/var/www/pterodactyl/html/public --email "$EMAIL" --agree-tos -d "$SERVNAME"
+    sudo apt -y install certbot python3-certbot-nginx
+    sudo certbot certonly -a webroot --webroot-path=/var/www/pterodactyl/html/public --email "$EMAIL" --agree-tos -d "$SERVNAME"
     sudo rm /etc/nginx/sites-available/pterodactyl.conf
     sudo openssl dhparam -out /etc/ssl/certs/dhparam.pem 2048
     echo '
@@ -304,78 +279,28 @@ echo '
     sudo service nginx restart
 }
 
-pterodactyl_apache() {
-    output "Creating webserver initial config file"
-    echo '
-<VirtualHost *:80>
-    ServerName '"${SERVNAME}"'
-    DocumentRoot "/var/www/pterodactyl/html/public"
-    AllowEncodedSlashes On
-      <Directory "/var/www/pterodactyl/html/public">
-        AllowOverride all
-      </Directory>
-</VirtualHost>
-' | sudo -E tee /etc/apache2/sites-available/pterodactyl.conf >/dev/null 2>&1
-
-    sudo ln -s /etc/apache2/sites-available/pterodactyl.conf /etc/apache2/sites-enabled/pterodactyl.conf
-    sudo a2enmod rewrite
-    sudo service apache2 restart
-    output "Install LetsEncrypt and setting SSL"
-    sudo aptitude -y install letsencrypt
-    sudo letsencrypt certonly -a webroot --webroot-path=/var/www/pterodactyl/html/public --email $EMAIL --agree-tos -d $SERVNAME
-
-    echo '
-<VirtualHost *:80>
-    ServerName '"${SERVNAME}"'
-    DocumentRoot "/var/www/pterodactyl/html/public"
-    AllowEncodedSlashes On
-       <Directory "/var/www/pterodactyl/html/public">
-          AllowOverride all
-       </Directory>
-</VirtualHost>
-    NameVirtualHost *:443
-<VirtualHost *:443>=
-	  DocumentRoot "/var/www/pterodactyl/html/public"
-    ServerName '"${SERVNAME}"'
-    <Directory "/var/www/pterodactyl/html/public">
-      AllowOverride all
-    </Directory>
-SSLEngine on
-SSLCertificateFile    /etc/letsencrypt/live/'"${SERVNAME}"'/cert.pem
-SSLCertificateKeyFile /etc/letsencrypt/live/'"${SERVNAME}"'/privkey.pem
-SSLCertificateChainFile /etc/letsencrypt/live/'"${SERVNAME}"'/fullchain.pem
-</VirtualHost>
-' | sudo -E tee /etc/apache2/sites-available/pterodactyl_ssl.conf >/dev/null 2>&1
-    sudo ln -s /etc/apache2/sites-available/pterodactyl_ssl.conf /etc/apache2/sites-enabled/pterodactyl_ssl.conf
-    sudo a2enmod ssl
-    sudo service apache2 restart
-}
-
 pterodactyl_daemon() {
     output "Installing the daemon now! Almost done!!"
-    sudo aptitude -y install linux-image-extra-$(uname -r) linux-image-extra-virtual
-    sudo aptitude update -y
-    sudo aptitude upgrade -y
+    sudo apt -y install linux-image-extra-$(uname -r) linux-image-extra-virtual
+    sudo apt update -y
+    sudo apt upgrade -y
     curl -sSL https://get.docker.com/ | sh
     sudo usermod -aG docker $whoami
     sudo systemctl enable docker
     output "Installing Nodejs"
-    curl -sL https://deb.nodesource.com/setup_6.x | sudo -E bash -
-    sudo aptitude -y install nodejs
+    curl -sL https://deb.nodesource.com/setup_14.x | sudo -E bash -
+    sudo apt -y install nodejs
     output "Making sure we didnt miss any dependencies "
-    sudo aptitude -y install tar unzip make gcc g++ python-minimal
+    sudo apt -y install tar unzip make gcc g++ python-minimal
     output "Ok really installing the daemon files now"
-    sudo mkdir -p /srv/daemon /srv/daemon-data
-    sudo chown -R $whoami:$whoami /srv/daemon
-    cd /srv/daemon
-    curl -Lo v0.3.7.tar.gz https://github.com/Pterodactyl/Daemon/archive/v0.3.7.tar.gz
-    tar --strip-components=1 -xzvf v0.3.7.tar.gz
-    npm install --only=production
+    mkdir -p /etc/pterodactyl
+    curl -L -o /usr/local/bin/wings https://github.com/pterodactyl/wings/releases/latest/download/wings_linux_amd64
+    chmod u+x /usr/local/bin/wings
 
     output "This step requires you to create your first node through your panel, only continue after you get your core code"
     output "Paste the code in the file and then hit CTRL + o then CTRL + x."
     read -p "Press enter to continue" nothing
-    sudo nano /srv/daemon/config/core.json
+    sudo nano /etc/pterodactyl/config.yml
 sudo bash -c 'cat > /etc/systemd/system/wings.service' <<-EOF
 [Unit]
 Description=Pterodactyl Wings Daemon
@@ -383,11 +308,10 @@ After=docker.service
 
 [Service]
 User=root
-#Group=some_group
-WorkingDirectory=/srv/daemon
+WorkingDirectory=/etc/pterodactyl
 LimitNOFILE=4096
 PIDFile=/var/run/wings/daemon.pid
-ExecStart=/usr/bin/node /srv/daemon/src/index.js
+ExecStart=/usr/local/bin/wings
 Restart=on-failure
 StartLimitInterval=600
 
@@ -454,19 +378,6 @@ case $action in
     pterodactyl_niginx
     pterodactyl_daemon
     ;;
-    "apache")
-      server_setup
-      initial
-      install_apache
-      install_mariadb
-      install_dependencies_apache
-      install_timezone
-      server
-      pterodactyl
-      pterodactyl_1
-      pterodactyl_apache
-      pterodactyl_daemon
-      ;;
   *)
     usage $0
     ;;
